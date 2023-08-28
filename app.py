@@ -40,10 +40,6 @@ def login():
                 result = cursor.fetchone()          # 获取一条结果
                 hashed_password = result[0].encode()
                 salt = result[1].encode()
-                print(hashed_password)
-                print(salt)
-                print(type(hashed_password))
-                print(type(salt))
 
                 if result and verify_password(password, hashed_password, salt):
                     return jsonify({'message': 'Login successful'}), 200
