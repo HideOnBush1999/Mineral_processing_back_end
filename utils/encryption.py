@@ -34,12 +34,12 @@ if __name__ == "__main__":
     else:
         print("Password is incorrect.")
 
-    plain_password = "123456"
+    plain_password = "admin123"
     hashed_password, salt = encrypt_and_salt_password(plain_password)
     print("Hashed password:", hashed_password)
     print("Salt:", salt)
 
-    plain_password = "111111"
+    plain_password = "cheng123"
     hashed_password, salt = encrypt_and_salt_password(plain_password)
     print("Hashed password:", hashed_password)
     print("Salt:", salt)
