@@ -8,10 +8,10 @@ import re
 from spacy.matcher import PhraseMatcher
 from sentence_transformers import SentenceTransformer, util
 
-# 初始化客户端和模型
+# 全局定义变量
 client = Client("http://localhost:9997")
-model_uid = client.launch_model(model_name="local-qwen-7b-q5_k_m")
-model = client.get_model(model_uid)
+model_uid = None
+model = None
 
 # 加载一个预训练的中文自然语言处理模型，使其准备好对中文文本进行分析和处理
 nlp = spacy.load("zh_core_web_sm")
@@ -49,31 +49,76 @@ qa = Blueprint('qa', __name__, url_prefix='/qa')
 
 @qa.route('/chat', methods=['POST'])
 def chat():
-    # global model
-    prompt = request.json.get('prompt')
-    logger.info
+    global model
+    try:
+        prompt = request.json.get('prompt')
+        logger.info(f"Received chat request with prompt: {prompt}")
 
-    # 提取三元组
-    triple = extract_triple(prompt)
+        # 提取三元组
+        triple = extract_triple(prompt)
 
-    chat_history = [{
-        'role': 'assistant',
-        'content': triple
-    }]
+        chat_history = [{
+            'role': 'assistant',
+            'content': triple
+        }]
 
-    # 调用模型进行聊天
-    response = model.chat(
-        prompt=prompt, chat_history=chat_history, generate_config={"max_tokens": 1024})
+        # 调用模型进行聊天
+        response = model.chat(
+            prompt=prompt, chat_history=chat_history, generate_config={"max_tokens": 1024})
 
-    print("返回内容：", response, "\n\n")
+        content = response['choices'][0]['message']['content']
+        logger.info(f"chat_history: {chat_history}, response: {content}")
+        return jsonify({
+            'status': 'success',
+            'chat_history': chat_history,
+            'content': content
+        }), 200
+    except Exception as e:
+        logger.error(f"Error in chat: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
-    content = response['choices'][0]['message']['content']
 
-    return jsonify({
-        'status': 'success',
-        'chat_history': chat_history,
-        'content': content
-    }), 200
+@qa.route('/create_model', methods=['POST'])
+def create_model():
+    global client, model_uid, model
+    try:
+        model_name = request.json.get('model_name', "local-qwen-7b-q5_k_m")
+        model_uid = client.launch_model(model_name=model_name)
+        model = client.get_model(model_uid)
+        logger.info("Model created successfully")
+        return jsonify({
+            'status': 'success',
+            'message': f'Model {model_name} created with UID {model_uid}'
+        }), 200
+    except Exception as e:
+        logger.error(f"Error creating model: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Error creating model: {e}'
+        }), 500
+
+
+@qa.route('/terminate_model', methods=['POST'])
+def terminate_model():
+    try:
+        global client, model_uid, model
+        client.terminate_model(model_uid)
+        model_uid = None
+        model = None
+        logger.info("Model terminated successfully")
+        return jsonify({
+            'status': 'success',
+            'message': f'Model terminated'
+        }), 200
+    except Exception as e:
+        logger.error(f"Error while terminating model: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Error while terminating model: {e}'
+        }), 500
 
 
 def calculate_similarity(text1, text2):

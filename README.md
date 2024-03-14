@@ -47,3 +47,6 @@ INSERT INTO users (username, password, salt) VALUES
 
 
 
+### 需求
+
+- 创建连接和断开模型的接口
