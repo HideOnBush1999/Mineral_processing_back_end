@@ -85,7 +85,7 @@ def chat():
 def create_model():
     global client, model_uid, model
     try:
-        model_name = request.json.get('model_name', "local-qwen-7b-q5_k_m")
+        model_name = "local-qwen-7b-q5_k_m"
         model_uid = client.launch_model(model_name=model_name)
         model = client.get_model(model_uid)
         logger.info("Model created successfully")
