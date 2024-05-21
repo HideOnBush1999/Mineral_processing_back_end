@@ -44,5 +44,3 @@ INSERT INTO users (username, password, salt) VALUES
 ('admin', '$2b$12$zr5LiUg.ptqghO3AixsL..h4dvEgXa5Ziq785L9R/isEvGzTPnA.K', '$2b$12$zr5LiUg.ptqghO3AixsL..'),
 ('cheng', '$2b$12$PNS04dr9La/6CXYoFIvMy.EbLlAdqnKxKsN3OSjyeXpqx24ECmxii', '$2b$12$PNS04dr9La/6CXYoFIvMy.');
 ```
-
-
