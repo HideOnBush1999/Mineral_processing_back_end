@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from utils.encryption import verify_password
-from utils.database import mysql_db_pool
+from utils.database import get_mysql_db_pool
 from utils.logger import logger
 
 
@@ -14,6 +14,7 @@ def logining():
     password = data.get('password')
 
     try:
+        mysql_db_pool = get_mysql_db_pool()  # 获取数据库连接池
         with mysql_db_pool.connection() as conn:   # 使用数据库连接池中的连接
             with conn.cursor() as cursor:    # 连接上创建游标
                 query = "SELECT password, salt FROM users WHERE username = %s"   # 查询语句

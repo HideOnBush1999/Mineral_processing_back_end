@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from flask import Blueprint, request, jsonify
 from xinference.client import Client
-from utils.database import neo4j_driver
+from utils.database import get_neo4j_driver
 from utils.logger import logger
 import spacy
 import re
@@ -13,35 +13,57 @@ client = Client("http://localhost:9997")
 model_uid = None
 model = None
 
+
+nlp = None
+matcher = None
+model_extract = None
+
+
+def get_sentence_transformer_model():
+    global model_extract
+    if model_extract is None:
+        model_extract = SentenceTransformer(
+            'paraphrase-multilingual-MiniLM-L12-v2')
+    return model_extract
+
+
 # 加载一个预训练的中文自然语言处理模型，使其准备好对中文文本进行分析和处理
-nlp = spacy.load("zh_core_web_sm")
-
-file_path = "E:\\myData\study\\研究生\\项目\\矿产加工系统\\back\\data\\triplets.txt"
-with open(file_path, 'r', encoding='utf-8') as file:
-    triplets = file.readlines()
-
-# 提取三元组中的实体和关系
-entities_and_relations = set()
-
-# 使用正则表达式来解析每行中的实体和关系
-pattern = re.compile(r'\(([^,]+), ([^,]+)(?:, ([^,]+))?\)')
-
-for triplet in triplets:
-    match = pattern.search(triplet)
-    if match:
-        # 将匹配到的实体和关系添加到集合中
-        entities_and_relations.update(match.groups())
-
-# 将集合转换为列表并排序
-custom_wordlist = sorted(list(entities_and_relations))
-
-# 创建 PhraseMatcher
-matcher = PhraseMatcher(nlp.vocab, attr="LOWER")
-patterns = [nlp.make_doc(word) for word in custom_wordlist]
-matcher.add("CustomTerms", patterns)
+def get_nlp_model():
+    global nlp
+    if nlp is None:
+        nlp = spacy.load("zh_core_web_sm")
+    return nlp
 
 
-model_extract = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+def get_matcher():
+    global matcher
+    if matcher is None:
+        nlp = get_nlp_model()
+
+        file_path = "E:\\myData\\study\\研究生\\项目\\矿产加工系统\\back\\data\\triplets.txt"
+        with open(file_path, 'r', encoding='utf-8') as file:
+            triplets = file.readlines()
+
+        # 提取三元组中的实体和关系
+        entities_and_relations = set()
+
+        # 正则表达式匹配
+        pattern = re.compile(r'\(([^,]+), ([^,]+)(?:, ([^,]+))?\)')
+
+        for triplet in triplets:
+            match = pattern.search(triplet)
+            if match:
+                # 将匹配到的实体和关系添加到集合中
+                entities_and_relations.update(match.groups())
+
+        # 将集合转换为列表并排序
+        custom_wordlist = sorted(list(entities_and_relations))
+
+        # 创建 PhraseMatcher
+        matcher = PhraseMatcher(nlp.vocab, attr="LOWER")
+        patterns = [nlp.make_doc(word) for word in custom_wordlist]
+        matcher.add("CustomTerms", patterns)
+    return matcher
 
 
 qa = Blueprint('qa', __name__, url_prefix='/qa')
@@ -123,8 +145,9 @@ def terminate_model():
 
 def calculate_similarity(text1, text2):
     # 将文本转换为向量
-    embeddings1 = model_extract.encode(text1, convert_to_tensor=True)
-    embeddings2 = model_extract.encode(text2, convert_to_tensor=True)
+    model = get_sentence_transformer_model()
+    embeddings1 = model.encode(text1, convert_to_tensor=True)
+    embeddings2 = model.encode(text2, convert_to_tensor=True)
 
     # 计算余弦相似度
     cosine_scores = util.pytorch_cos_sim(embeddings1, embeddings2)
@@ -151,6 +174,9 @@ def filter_results(results, question):
 
 
 def extract_keywords(question):
+    nlp = get_nlp_model()
+    matcher = get_matcher()
+
     doc = nlp(question)
 
     # 使用 PhraseMatcher 匹配自定义词表中的术语
@@ -180,6 +206,7 @@ def execute_query(query):
     if query is None:
         return []
 
+    neo4j_driver = get_neo4j_driver()
     with neo4j_driver as driver:
         with driver.session() as session:
             result = session.run(query)

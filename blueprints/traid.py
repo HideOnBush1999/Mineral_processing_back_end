@@ -2,7 +2,7 @@
 # 其中，新增、修改、删除功能需要具有管理员权限
 
 from flask import request, jsonify, Blueprint
-from utils.database import neo4j_driver
+from utils.database import get_neo4j_driver
 
 traid = Blueprint('traid', __name__, url_prefix='/traid')
 
@@ -13,6 +13,7 @@ def get_traids():
     limit = request.args.get('limit', default=10, type=int)
     skip = (page - 1) * limit
 
+    neo4j_driver = get_neo4j_driver()
     with neo4j_driver.session() as session:
         result = session.run(
             "MATCH (s)-[r]->(o) RETURN s, type(r) as relation, o SKIP $skip LIMIT $limit",
@@ -32,6 +33,7 @@ def get_traids():
 def get_traid():
     keyword = request.args.get('keyword', '', type=str)
 
+    neo4j_driver = get_neo4j_driver()
     with neo4j_driver.session() as session:
         result = session.run(
             """
@@ -61,6 +63,7 @@ def add_traid():
     if not subject or not relation or not object_:
         return jsonify({'error': 'Missing required parameters'}), 400
 
+    neo4j_driver = get_neo4j_driver()
     with neo4j_driver.session() as session:
         try:
             # MERGE 语句确保如果节点或关系已经存在，它们将不会被创建新的，而是使用现有的
@@ -80,50 +83,50 @@ def add_traid():
             return jsonify({'error': 'Failed to add triple'}), 500
 
 
-@traid.route('/update', methods=['PUT'])
-def update_traid():
-    data = request.json
-    old_subject = data.get('old_subject')
-    old_relation = data.get('old_relation')
-    old_object = data.get('old_object')
-    new_subject = data.get('new_subject')
-    new_relation = data.get('new_relation')
-    new_object = data.get('new_object')
+# @traid.route('/update', methods=['PUT'])
+# def update_traid():
+#     data = request.json
+#     old_subject = data.get('old_subject')
+#     old_relation = data.get('old_relation')
+#     old_object = data.get('old_object')
+#     new_subject = data.get('new_subject')
+#     new_relation = data.get('new_relation')
+#     new_object = data.get('new_object')
 
-    if not all([old_subject, old_relation, old_object, new_subject, new_relation, new_object]):
-        return jsonify({'error': 'Missing required parameters'}), 400
+#     if not all([old_subject, old_relation, old_object, new_subject, new_relation, new_object]):
+#         return jsonify({'error': 'Missing required parameters'}), 400
 
-    with neo4j_driver.session() as session:
-        try:
-            with session.begin_transaction() as tx:
-                # 删除旧关系
-                tx.run(
-                    "MATCH (s:Entity {name: $old_subject})-[r:`" +
-                    old_relation + "`]->(o:Entity {name: $old_object}) "
-                    "DELETE r",
-                    old_subject=old_subject, old_object=old_object
-                )
-                # 更新节点名称
-                tx.run(
-                    "MATCH (s:Entity {name: $old_subject}) "
-                    "SET s.name = $new_subject",
-                    old_subject=old_subject, new_subject=new_subject
-                )
-                tx.run(
-                    "MATCH (o:Entity {name: $old_object}) "
-                    "SET o.name = $new_object",
-                    old_object=old_object, new_object=new_object
-                )
-                # 创建新关系
-                tx.run(
-                    "MATCH (s:Entity {name: $new_subject}), (o:Entity {name: $new_object}) "
-                    "CREATE (s)-[r:`" + new_relation + "`]->(o)",
-                    new_subject=new_subject, new_object=new_object
-                )
-            return jsonify({'message': 'Triple updated successfully'}), 200
-        except Exception as e:
-            print(f"Error updating triple: {e}")
-            return jsonify({'error': 'Failed to update triple'}), 500
+#     with neo4j_driver.session() as session:
+#         try:
+#             with session.begin_transaction() as tx:
+#                 # 删除旧关系
+#                 tx.run(
+#                     "MATCH (s:Entity {name: $old_subject})-[r:`" +
+#                     old_relation + "`]->(o:Entity {name: $old_object}) "
+#                     "DELETE r",
+#                     old_subject=old_subject, old_object=old_object
+#                 )
+#                 # 更新节点名称
+#                 tx.run(
+#                     "MATCH (s:Entity {name: $old_subject}) "
+#                     "SET s.name = $new_subject",
+#                     old_subject=old_subject, new_subject=new_subject
+#                 )
+#                 tx.run(
+#                     "MATCH (o:Entity {name: $old_object}) "
+#                     "SET o.name = $new_object",
+#                     old_object=old_object, new_object=new_object
+#                 )
+#                 # 创建新关系
+#                 tx.run(
+#                     "MATCH (s:Entity {name: $new_subject}), (o:Entity {name: $new_object}) "
+#                     "CREATE (s)-[r:`" + new_relation + "`]->(o)",
+#                     new_subject=new_subject, new_object=new_object
+#                 )
+#             return jsonify({'message': 'Triple updated successfully'}), 200
+#         except Exception as e:
+#             print(f"Error updating triple: {e}")
+#             return jsonify({'error': 'Failed to update triple'}), 500
 
 
 # 直接更新节点名称可能会影响与该节点相关的其他关系。
@@ -144,6 +147,7 @@ def update_traid():
     if not all([old_subject, old_relation, old_object, new_subject, new_relation, new_object]):
         return jsonify({'error': 'Missing required parameters'}), 400
 
+    neo4j_driver = get_neo4j_driver()
     with neo4j_driver.session() as session:
         try:
             with session.begin_transaction() as tx:
@@ -188,6 +192,7 @@ def delete_traid():
     if not subject or not relation or not object_:
         return jsonify({'error': 'Missing required parameters'}), 400
 
+    neo4j_driver = get_neo4j_driver()
     with neo4j_driver.session() as session:
         try:
             result = session.run(

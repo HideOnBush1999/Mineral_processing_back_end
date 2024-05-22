@@ -2,6 +2,10 @@ import pymysql
 from dbutils.pooled_db import PooledDB
 from neo4j import GraphDatabase
 
+# 全局变量
+mysql_db_pool = None
+neo4j_driver = None
+
 # MySQL database configuration
 mysql_db_config = {
     'host': '127.0.0.1',
@@ -11,15 +15,18 @@ mysql_db_config = {
 }
 
 # Create MySQL database pool
-def create_mysql_db_pool():
-    return PooledDB(
-        pymysql,
-        mincached=5,
-        maxcached=10,
-        maxconnections=20,
-        blocking=True,
-        **mysql_db_config
-    )
+def get_mysql_db_pool():
+    global mysql_db_pool
+    if mysql_db_pool is None:
+        mysql_db_pool = PooledDB(
+            pymysql,
+            mincached=5,
+            maxcached=10,
+            maxconnections=20,
+            blocking=True,
+            **mysql_db_config
+        )
+    return mysql_db_pool
 
 # Neo4j database credentials
 neo4j_uri = "bolt://localhost:7687"
@@ -27,11 +34,10 @@ neo4j_username = "neo4j"
 neo4j_password = "password"
 
 # Connect to Neo4j database
-def create_neo4j_driver():
-    return GraphDatabase.driver(neo4j_uri, auth=(neo4j_username, neo4j_password))
+def get_neo4j_driver():
+    global neo4j_driver
+    if neo4j_driver is None:
+        neo4j_driver = GraphDatabase.driver(
+            neo4j_uri, auth=(neo4j_username, neo4j_password))
+    return neo4j_driver
 
-# MySQL database pool instance
-mysql_db_pool = create_mysql_db_pool()
-
-# Neo4j database driver instance
-neo4j_driver = create_neo4j_driver()
