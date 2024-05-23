@@ -26,7 +26,15 @@ def get_traids():
                 'relation': record['relation'],
                 'object': record['o']['name']
             })
-        return jsonify(triples)
+
+        total_result = session.run(
+            "MATCH (s)-[r]->(o) RETURN count(*) as total")
+        total = total_result.single()['total']
+
+        return jsonify({
+            'data': triples,
+            'total': total
+        })
 
 
 @traid.route('/search', methods=['GET'])
@@ -50,7 +58,13 @@ def get_traid():
                 'relation': record['relation'],
                 'object': record['o']['name']
             })
-        return jsonify(triples)
+
+        total = len(triples)
+        
+        return jsonify({
+            'data': triples,
+            'total': total
+        })
 
 
 @traid.route('/add', methods=['POST'])
