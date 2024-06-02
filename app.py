@@ -4,6 +4,7 @@ from blueprints.login import login
 from blueprints.chat import qa
 from blueprints.traid import traid
 from blueprints.multi_layer_modeling import multi_layer_modeling
+from blueprints.parameter_extraction import parameter_extraction
 from blueprints.correlation_analysis import correlation_analysis
 
 app = Flask(__name__)
@@ -14,6 +15,7 @@ app.register_blueprint(login)
 app.register_blueprint(qa)
 app.register_blueprint(traid)
 app.register_blueprint(multi_layer_modeling)
+app.register_blueprint(parameter_extraction)
 app.register_blueprint(correlation_analysis)
 
 
