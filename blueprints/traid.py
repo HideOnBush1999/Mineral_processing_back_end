@@ -24,12 +24,19 @@ def get_traids():
             triples.append({
                 'subject': record['s']['name'],
                 'relation': record['relation'],
-                'object': record['o']['name']
+                'object': record['o']['name'],
+                'is_empty': False
             })
 
         total_result = session.run(
             "MATCH (s)-[r]->(o) RETURN count(*) as total")
         total = total_result.single()['total']
+
+        # 数据不足 limit 条时，补充空数据
+        if len(triples) < limit:
+             empty_rows = limit - len(triples)
+             for _ in range(empty_rows):
+                triples.append({'subject': '... ', 'relation': '... ', 'object': '... ', 'is_empty': True})
 
         return jsonify({
             'data': triples,
