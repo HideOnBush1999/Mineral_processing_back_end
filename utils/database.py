@@ -45,7 +45,7 @@ def get_neo4j_driver():
 
 # MinIO client configuration
 minio_config = {
-    'endpoint': '127.0.0.1:9000',
+    'endpoint': '127.0.0.1:9005',
     'access_key': 'minioadmin',
     'secret_key': 'minioadmin',
     'secure': False  # 如果使用的是http而不是https，设为False
