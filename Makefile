@@ -4,8 +4,18 @@
 MINIO_EXECUTABLE := D:\codeSoftware\minio\minio.exe
 MINIO_DATA_DIR := D:\codeSoftware\minio\minioData
 
-.PHONY: start_minio
+START_LLM := xinference-local
 
-# Target to start MinIO server
-start_minio:
-	$(MINIO_EXECUTABLE) server $(MINIO_DATA_DIR)
+.PHONY: minio, llm, run
+
+minio:
+	$(MINIO_EXECUTABLE) server --address :9005 $(MINIO_DATA_DIR)
+
+
+# 定义启动命令的规则
+llm:
+	@echo "Starting xinference-local..."
+	@$(START_LLM)
+
+run:
+	python app.py
