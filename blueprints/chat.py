@@ -7,6 +7,8 @@ import spacy
 import re
 from spacy.matcher import PhraseMatcher
 from sentence_transformers import SentenceTransformer, util
+from utils.websocket import socketio
+import json
 
 # 全局定义变量
 client = Client("http://localhost:9997")
@@ -71,36 +73,71 @@ qa = Blueprint('qa', __name__, url_prefix='/qa')
 
 @qa.route('/chat', methods=['POST'])
 def chat():
-    global model
     try:
         prompt = request.json.get('prompt')
-        logger.info(f"Received chat request with prompt: {prompt}")
+        logger.info(f"收到聊天请求，提示：{prompt}")
 
         # 提取三元组
         triple = extract_triple(prompt)
 
-        chat_history = [{
-            'role': 'assistant',
-            'content': triple
-        }]
+        if not triple:
+            response = "未找到相关度较高的三元组"
+        else:
+            response = "查询到相关的三元组为：\n"
+            for result, score in triple:
+                response += f"（{result[0]}, {result[1]}, {result[2]}） 相关度：{score:.2f}\n"
+            
+        # 调用后台任务启动对话流
+        data = {'prompt': prompt, 'triple': response}
+        logger.info(f"启动后台任务，数据：{json.dumps(data)}")
+        socketio.start_background_task(target=start_chat_stream_background, data=data)
 
-        # 调用模型进行聊天
-        response = model.chat(
-            prompt=prompt, chat_history=chat_history, generate_config={"max_tokens": 1024})
+        return jsonify({"message": response.strip()})
 
-        content = response['choices'][0]['message']['content']
-        logger.info(f"chat_history: {chat_history}, response: {content}")
-        return jsonify({
-            'status': 'success',
-            'chat_history': chat_history,
-            'content': content
-        }), 200
     except Exception as e:
-        logger.error(f"Error in chat: {e}")
+        logger.error(f"聊天错误：{e}")
         return jsonify({
             'status': 'error',
             'message': str(e)
         }), 500
+
+
+def start_chat_stream_background(data):
+    logger.info(f"后台任务收到数据：{data}")
+    global model
+    prompt = data.get('prompt')
+    triple = data.get('triple')
+
+    # 对 chat_history 进行初始化，原先的 chat_history 被清空，所以不支持多轮对话
+    chat_history = [{
+        'role': 'assistant',
+        'content': triple
+    }]
+    try:
+        # 调用模型进行聊天，添加 stream=True 后，返回的是一个迭代器
+        response_stream = model.chat(
+            prompt=prompt, chat_history=chat_history, generate_config={"max_tokens": 1024, "stream": True})
+
+        # 逐步处理流式响应
+        for response in response_stream:
+            delta = response['choices'][0].get('delta', {})
+            content = delta.get('content', '')  # 提取实际的内容
+            logger.info(f"发送 chat_response 内容：{content}")
+            socketio.emit('chat_response', {'content': content}, namespace='/qa')
+
+        socketio.emit('chat_response', {'content': "#finish#"}, namespace='/qa')
+        logger.info(f"对话流结束")
+
+    except Exception as e:
+        logger.error(f"聊天流错误：{e}")
+        socketio.emit('chat_response_complete', {'full_response': "对话结束，对话流异常"}, namespace='/qa')
+
+
+#  客户端可以调用该接口启动对话流，但是前端并没有调用该接口，因为在 chat 接口中已经启动了后台任务
+@socketio.on('start_chat_stream', namespace='/qa')
+def start_chat_stream(data):
+    logger.info(f"收到 start_chat_stream 事件，数据：{data}")
+    start_chat_stream_background(data)
 
 
 @qa.route('/create_model', methods=['POST'])
@@ -168,8 +205,8 @@ def filter_results(results, question):
     scored_results = sorted(zip(results, scores),
                             key=lambda x: x[1], reverse=True)
 
-    # 返回得分最高的三个结果
-    top_results = [result for result, score in scored_results[:3]]
+    # 过滤得分大于 0.1 的结果，并取前三高
+    top_results = [(result, score) for result, score in scored_results if score > 0.1][:3]
     return top_results
 
 
@@ -234,8 +271,8 @@ def extract_triple(question):
     results = execute_query(query)
     logger.info(f"Query Results:\n{results}\n\n")
 
+    # 过滤结果并返回最相关的三元组
     results = filter_results(results, question)
     logger.info(f"Filtered Results:\n{results}\n\n")
 
-    return "下面是与改问题可能相关的三元组（可能包含了一些于该问题无关的三元组，请根据实际情况进行判断）: \n" + \
-        str(results)
+    return results
