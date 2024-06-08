@@ -41,6 +41,6 @@ CREATE TABLE users (
 );
 
 INSERT INTO users (username, password, salt) VALUES
-('admin', '$2b$12$zr5LiUg.ptqghO3AixsL..h4dvEgXa5Ziq785L9R/isEvGzTPnA.K', '$2b$12$zr5LiUg.ptqghO3AixsL..'),
-('cheng', '$2b$12$PNS04dr9La/6CXYoFIvMy.EbLlAdqnKxKsN3OSjyeXpqx24ECmxii', '$2b$12$PNS04dr9La/6CXYoFIvMy.');
+('admin', '$2b$12$3c2Nkuon.78tQMhY1eLhWujVLIfPYZpRb0kU/9LDSPpjFuG4g2VDa', '$2b$12$3c2Nkuon.78tQMhY1eLhWu'),
+('cheng', '$2b$12$r6.pPWaHOLONR3bxrRGFLu30jxsbdRYnP/bpHovjkLqjIK3.XnxBC', '$2b$12$r6.pPWaHOLONR3bxrRGFLu');
 ```
