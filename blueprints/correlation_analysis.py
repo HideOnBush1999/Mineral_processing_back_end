@@ -11,6 +11,49 @@ import os
 
 correlation_analysis = Blueprint('correlation_analysis', __name__, url_prefix='/correlation_analysis')
 
+
+# 上传 excel
+@correlation_analysis.route('/upload_excel', methods=['POST'])
+def excel_file_upload():
+    try:
+        # 确保桶存在
+        minio_client = get_minio_client()
+        bucket_name = 'extracted-data'
+        if not minio_client.bucket_exists(bucket_name):
+            minio_client.make_bucket(bucket_name)
+
+        file = request.files['file']
+        if not file:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        # 如果用户没有选择文件，浏览器提交的文件名可能为空
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+
+        # 读取文件内容到内存中
+        file_name = file.filename
+        file_content = file.read()
+        
+         # 将文件上传到 Minio
+        minio_client.put_object(
+            bucket_name, 
+            file_name, 
+            io.BytesIO(file_content),
+            len(file_content)
+        ) 
+        
+        # 复制文件到本地目录
+        local_dir = './data/correlation/extracted_data'
+        if not os.path.exists(local_dir):
+            os.makedirs(local_dir)
+        
+        file_path = os.path.join(local_dir, file_name)
+        file.save(file_path)
+        
+        return jsonify({'message': 'File uploaded successfully', 'file_path': file_path}), 200
+    except Exception as e:
+        return jsonify({'error': 'An error occurred during file upload', 'details': str(e)}), 500
+
 # 列出 excel
 @correlation_analysis.route('/list_excel', methods=['GET'])
 def list_excel():
