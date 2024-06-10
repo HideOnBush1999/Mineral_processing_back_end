@@ -44,3 +44,11 @@ INSERT INTO users (username, password, salt) VALUES
 ('admin', '$2b$12$3c2Nkuon.78tQMhY1eLhWujVLIfPYZpRb0kU/9LDSPpjFuG4g2VDa', '$2b$12$3c2Nkuon.78tQMhY1eLhWu'),
 ('cheng', '$2b$12$r6.pPWaHOLONR3bxrRGFLu30jxsbdRYnP/bpHovjkLqjIK3.XnxBC', '$2b$12$r6.pPWaHOLONR3bxrRGFLu');
 ```
+
+单例   资源管理
+
+Websocket 加 流式推送
+流式推送（如逐字逐句地发送大语言模型的回答）最适合使用 WebSocket。这是因为 WebSocket 提供了全双工通信，允许服务器实时地向客户端发送数据，而不需要客户端不断地发起新的请求。
+
+Celery 异步任务队列  -->  用在模型的训练耗时任务上  和 go 语言中的 Asynq 库类似，Asynq 使用 Redis 作为消息代理
+Celery 是一个基于 Python 的异步任务队列，它可以轻松地将耗时的任务异步化，并通过消息队列（如 RabbitMQ、Redis 等）将任务结果返回给客户端。
