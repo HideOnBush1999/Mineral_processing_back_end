@@ -45,6 +45,8 @@ INSERT INTO users (username, password, salt) VALUES
 ('cheng', '$2b$12$r6.pPWaHOLONR3bxrRGFLu30jxsbdRYnP/bpHovjkLqjIK3.XnxBC', '$2b$12$r6.pPWaHOLONR3bxrRGFLu');
 ```
 
+minio 对象存储
+
 单例   资源管理
 
 Websocket 加 流式推送
