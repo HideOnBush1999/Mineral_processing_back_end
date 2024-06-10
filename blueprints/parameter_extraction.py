@@ -9,7 +9,9 @@ from sklearn.inspection import permutation_importance
 from sklearn.feature_selection import RFE
 import joblib
 from datetime import datetime
-
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error, r2_score
+import base64
 
 
 parameter_extraction = Blueprint(
@@ -396,7 +398,7 @@ def permutation_importances():
         return jsonify({"error": f"An error occurred: {str(e)}"}), 500
 
 
-# TODO: 递归特征消除函数   TODO: add rabbitmq
+# TODO: 递归特征消除函数  --> 未完成，不做也行
 @parameter_extraction.route('/recursive_feature_elimination', methods=['POST'])
 def recursive_feature_elimination():
     data = request.get_json()
@@ -404,6 +406,7 @@ def recursive_feature_elimination():
     input_file = data.get('input_file')  # 输入文件名
     output_file = data.get('output_file')  # 输出文件名
 
+    print(data)
     model_path = f'./model/para-extraction-rf/{model_name}'
     if not os.path.exists(model_path):
         return jsonify({"error": "Model not found"}), 404
@@ -420,9 +423,11 @@ def recursive_feature_elimination():
     try:
         X = pd.read_excel(file_path_input)
         y = pd.read_excel(file_path_output).iloc[:, 0]
-        rfe = RFE(model, n_features_to_select=1, step=1)
+        rfe = RFE(model, n_features_to_select=10, step=1)
+        print("abc")
         rfe.fit(X, y)
         selected_names = X.columns[rfe.get_support()].tolist()
+        print(selected_names)
 
         return jsonify({
             "message": "Recursive feature elimination selected features successfully",
@@ -434,3 +439,58 @@ def recursive_feature_elimination():
 
 
 
+@parameter_extraction.route('/model_evaluation', methods=['POST'])
+def model_evaluation():
+    data = request.get_json()
+    model_name = data.get('model_name')
+    input_file = data.get('input_file')
+    output_file = data.get('output_file')
+
+    model_path = f'./model/para-extraction-rf/{model_name}'
+    if not os.path.exists(model_path):
+        return jsonify({"error": "Model not found"}), 404
+    model = joblib.load(model_path)
+
+    file_path_input = f'./data/correlation/input/{input_file}'
+    if not os.path.exists(file_path_input):
+        return jsonify({"error": "File not found"}), 404
+
+    file_path_output = f'./data/correlation/output/{output_file}'
+    if not os.path.exists(file_path_output):
+        return jsonify({"error": "File not found"}), 404
+    
+    try:
+        X = pd.read_excel(file_path_input)
+        y = pd.read_excel(file_path_output).iloc[:, 0]
+        y_pred = model.predict(X)
+        mse = mean_squared_error(y, y_pred)
+        r2 = r2_score(y, y_pred)
+
+        # Sampling every 50th data point
+        sample_indices = list(range(0, len(y), 50))
+        y_sampled = y.iloc[sample_indices]
+        y_pred_sampled = y_pred[sample_indices]
+
+        # Plotting the actual vs predicted results with sampling
+        plt.figure(figsize=(10, 6))
+        plt.plot(sample_indices, y_sampled, label='Actual', marker='o')
+        plt.plot(sample_indices, y_pred_sampled, label='Predicted', marker='x')
+        plt.xlabel('Index')
+        plt.ylabel('Value')
+        plt.title('Actual vs Predicted')
+        plt.legend()
+
+        # Save the plot to a BytesIO object
+        img_io = io.BytesIO()
+        plt.savefig(img_io, format='png')
+        img_io.seek(0)
+        img_base64 = base64.b64encode(img_io.getvalue()).decode()
+
+        return jsonify({
+            "mse": mse,
+            "r2": r2,
+            "image": img_base64
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
