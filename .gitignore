@@ -8,3 +8,4 @@ __pycache__/
 data
 model
 algorithm
+dump.rdb
