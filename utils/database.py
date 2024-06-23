@@ -2,11 +2,13 @@ import pymysql
 from dbutils.pooled_db import PooledDB
 from neo4j import GraphDatabase
 from minio import Minio
+import redis
 
 # 全局变量
 mysql_db_pool = None
 neo4j_driver = None
 minio_client = None
+redis_client = None
 
 # MySQL database configuration
 mysql_db_config = {
@@ -63,3 +65,20 @@ def get_minio_client():
         )
     return minio_client
 
+# Redis configuration
+redis_config = {
+    'host': '127.0.0.1',
+    'port': 6379,
+    'db': 0
+}
+
+# Create Redis client
+def get_redis_client():
+    global redis_client
+    if redis_client is None:
+        redis_client = redis.Redis(
+            host=redis_config['host'],
+            port=redis_config['port'],
+            db=redis_config['db']
+        )
+    return redis_client
