@@ -2,9 +2,114 @@ import numpy as np
 import pandas as pd
 from pyswarm import pso
 from utils.database import get_redis_client
+from utils.logger import logger
+from utils.database import get_minio_client
+import os
+import joblib
+from scipy.interpolate import interp1d
 
-# TODO: 1. 将优化的任务放在 Celery 中执行
-# TODO: 2. 将中间结果保存到 Redis 中
+
+# PSO 算法在定义的搜索空间内进行如下步骤：
+
+# 初始化粒子的位置和速度。
+# 计算每个粒子在当前位置的适应度值（即目标函数值）。
+# 更新每个粒子的速度和位置，使其向着当前最佳位置和全局最佳位置移动。
+# 反复迭代，直到达到最大迭代次数或者满足收敛条件。
+
+
+
+def get_bounds(dataset_name, module_name):
+    # 读取数据集
+    local_dir = './data/multi_layer'
+    dataset_path = os.path.join(local_dir, dataset_name)
+    logger.info("读取数据集：{}".format(dataset_path))
+    try:
+        data = pd.read_excel(dataset_path)
+    except Exception as e:
+        logger.error("数据集读取失败：{}".format(e))
+
+    if module_name == "给煤机" or module_name == "给风机" or module_name == "磨煤":
+        data = data.drop(data.index[:50])
+        if module_name == "给煤机":
+            input_cols = ['皮带转速', '比例系数']
+
+        if module_name == "给风机":
+            input_cols = ['热风阀门开度', '冷风阀门开度', '热一次风温度', '冷一次风温度']
+
+        if module_name == "磨煤":
+            input_cols = ['入口一次风流量', '入口一次风温度', '给煤量', '磨煤机电流', '原煤温度', '原煤水分']
+
+    if module_name == "锅炉进口空预器" or module_name == "给水系统" or module_name == "锅炉燃烧":
+        data = data.dropna()
+        num_samples = 1000
+        data = interpolate_data(data, num_samples)
+
+        if module_name == "锅炉进口空预器":
+            input_cols = ['O2 in APH (%)', 'Flue Gas in Temperature (°C)',
+                          'Flue gas temperature (℃)']
+
+        if module_name == "给水系统":
+            input_cols = [
+                'Superheater desuperheating water flow (t/h)',
+                'Reheater desuperheating water flow (t/h)',
+                'Feedwater pressure (MPa)',
+                'Flue gas temperature (℃)',
+                'Circulating water outlet temperature (℃)'
+            ]
+
+        if module_name == "锅炉燃烧":
+            input_cols = [
+                'Coal Flow (t/h)',
+                'O2 Out APH (%)',
+                'Corrected Flue Gas Out Temperature (°C)',
+                'Feedwater temperature (℃)',
+                'Feedwater flow (t/h)',
+                'Energy Input From Boiler (Kcal/h)',
+                'Boiler oxygen level (%)'
+            ]
+
+    input_bounds = []
+    for col in input_cols:
+        input_bounds.append((data[col].min(), data[col].max()))
+
+    bounds = tuple(input_bounds)
+    logger.info("输入参数上下限：{}".format(bounds))
+    return bounds
+
+
+def get_model(model_name):
+    # 读取模型
+    model_dir = './model/multi-layer-model'
+    model_path = os.path.join(model_dir, model_name)
+
+    # 如果本地不存在，则去 MinIO 下载
+    if not os.path.exists(model_path):
+        minio_client = get_minio_client()
+        bucket_name = 'multi-layer-model'
+
+        minio_client.fget_object(
+            bucket_name,
+            model_name,
+            model_path
+        )
+
+    # 读取模型
+    model = joblib.load(model_path)
+    logger.info(f'Loaded model {model_name} from {model_path}')
+    return model
+
+
+def interpolate_data(df, num_points):
+    x_old = np.arange(len(df))
+    x_new = np.linspace(0, len(df) - 1, num=num_points)
+    df_interpolated = pd.DataFrame()
+
+    for col in df.columns:
+        f = interp1d(x_old, df[col], kind='quadratic',
+                     fill_value="extrapolate")
+        df_interpolated[col] = f(x_new)
+
+    return df_interpolated
 
 class DataNotFoundError(Exception):
     pass
@@ -26,13 +131,15 @@ def objective_function_grinding(x, dataset_name, model):
 
 
     # 预测输出
-    y_pred = model.predict(X)[0]
+    y_pred = model.predict(X)
+    logger.info(f"y_pred.shape: {y_pred.shape}")
+    logger.info(f"y_pred[0]: {y_pred[0]}")
 
     # 计划目标1：最大化产出比
-    object1 = y_pred / X['给煤量']
+    object1 = y_pred[0] / x[new_input_columns.index('给煤量')]
 
     # 计划目标2：耗电量尽量小
-    object2 = (X['磨煤机电流'] - current_min) / (current_max - current_min)
+    object2 = (x[new_input_columns.index('磨煤机电流')] - current_min) / (current_max - current_min)
 
     combined_objective = -object1 + object2
 
@@ -49,6 +156,8 @@ def objective_function_coal_machine(x, model):
 
     # 预测输出
     y_pred = model.predict(X)
+    logger.info(f"y_pred.shape: {y_pred.shape}")
+    logger.info(f"y_pred[0]: {y_pred[0]}")
 
     # 计算目标：给煤量 与磨煤优化后的最佳输入的差值
     redis_client = get_redis_client()
@@ -56,7 +165,7 @@ def objective_function_coal_machine(x, model):
     if coal_supply is None:
         raise DataNotFoundError('coal_supply not found in Redis')
     
-    coal_supply_diff = abs(y_pred[0][0] - float(coal_supply))
+    coal_supply_diff = abs(y_pred[0] - float(coal_supply))
 
     return coal_supply_diff
 
@@ -68,6 +177,8 @@ def objective_function_wind_machine(x, model):
 
     # 预测输出
     y_pred = model.predict(X)
+    logger.info(f"y_pred.shape: {y_pred.shape}")
+    logger.info(f"y_pred[0]: {y_pred[0]}")
 
     # 计算目标：入口一次风流量 和 入口一次风温度 与磨煤优化后的最佳输入的差值
     redis_client = get_redis_client()
@@ -200,7 +311,7 @@ def objective_function_water(x, model):
 
 
 
-def get_optimization_results(dataset_name, module_name, model, bounds, particles=30, iterations=100):
+def get_optimization_results(dataset_name, module_name, model, bounds, particles, iterations):
     if module_name == "磨煤":
         def objective_function(x): return objective_function_grinding(
             x, dataset_name=dataset_name, model=model)

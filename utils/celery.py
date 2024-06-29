@@ -1,8 +1,6 @@
 from celery import Celery
 from utils.optimization import get_optimization_results, get_model, get_bounds
 from utils.logger import logger
-from utils.websocket import socketio
-
 
 
 class CelerySingleton:
@@ -33,7 +31,7 @@ def make_celery(config):
 # 配置变量，使用新格式
 celery_config = {
     'app_name': 'my_app',
-    'broker_url': 'redis://localhost:6379/0',  # 新格式
+    'broker_url': 'redis://localhost:6379/0',      # 新格式
     'result_backend': 'redis://localhost:6379/0',  # 新格式
     'broker_connection_retry_on_startup': True,
 }
@@ -53,18 +51,8 @@ def optimize_task(self, dataset_name, module_name, model_name):
         result = {'optimal_inputs': optimal_inputs.tolist(), 'optimal_value': optimal_value.tolist()}
         logger.info("优化任务完成")
 
-        # 任务完成后发送WebSocket事件
-        logger.info("123456")
-        socketio.emit('optimization_result', result, namespace='/multi_layer_modeling')
-        logger.info("WebSocket事件发送成功")
         return result
 
     except Exception as e:
         logger.error(f"优化任务出错: {e}")
-        error_result = {'state': 'FAILURE', 'error': str(e)}
-        
-        # 任务失败后发送WebSocket事件
-        logger.info("abcde")
-        socketio.emit('optimization_result', error_result, namespace='/multi_layer_modeling')
-        logger.info("WebSocket事件发送成功")
-        return error_result
+
