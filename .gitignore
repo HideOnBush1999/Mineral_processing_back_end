@@ -5,7 +5,7 @@
 temp.py
 __pycache__/
 *.log
-data
+data/*
 model
 algorithm
 dump.rdb
