@@ -6,7 +6,7 @@ REDIS_DIR := D:\codeSoftware\Redis-x64-5.0.14.1
 
 START_LLM := xinference-local
 
-.PHONY: minio, llm, redis, redis-cli, run
+.PHONY: minio, llm, redis, redis-cli, celery, run
 
 minio:
 	$(MINIO_EXECUTABLE) server --address :9005 $(MINIO_DATA_DIR)
@@ -23,6 +23,10 @@ redis:
 
 redis-cli:
 	$(REDIS_DIR)\redis-cli.exe -h 127.0.0.1 -p 6379
+
+
+celery:
+	celery -A utils.celery worker --loglevel=info -P eventlet
 
 
 run:

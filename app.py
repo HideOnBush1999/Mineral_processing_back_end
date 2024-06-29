@@ -8,10 +8,12 @@ from blueprints.multi_layer_manage import multi_layer_manage
 from blueprints.parameter_extraction import parameter_extraction
 from blueprints.correlation_analysis import correlation_analysis
 from utils.websocket import socketio
+from utils.celery import celery_config
 
 app = Flask(__name__)
 CORS(app)
-socketio.init_app(app, cors_allowed_origins="*")
+app.config.update(celery_config)
+socketio.init_app(app, cors_allowed_origins="*", async_mode='eventlet')
 
 
 app.register_blueprint(login)
