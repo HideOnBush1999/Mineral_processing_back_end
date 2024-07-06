@@ -20,8 +20,9 @@ def get_multi_layer_models():
         if not minio_client.bucket_exists(bucket_name):
             minio_client.make_bucket(bucket_name)
 
-        objects = minio_client.list_objects(bucket_name, recursive=True)
-        objects_list = list(objects)[skip:skip+limit]
+        objects = list(minio_client.list_objects(bucket_name, recursive=True))  # 转换为列表
+        total = len(objects)  # 计算总数
+        objects_list = objects[skip:skip+limit]  # 获取分页后的对象
         models = []
         for obj in objects_list:
             models.append({
@@ -31,9 +32,9 @@ def get_multi_layer_models():
 
         # 返回数据不满 limit 的时候，补充空数据
         for _ in range(limit - len(models)):
-            models.append({'name': '', 'size': '0 MB'})
+            models.append({'name': '', 'size': ''})
 
-        return jsonify({'models': models})
+        return jsonify({'models': models, 'total': total})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -120,8 +121,9 @@ def search_multi_layer_model():
                     # Convert size to MB and append "MB" unit
                     'size': f"{round(obj.size / (1024 * 1024), 2)} MB"
                 })
+        total = len(models)
 
-        return jsonify({'models': models})
+        return jsonify({'models': models, 'total': total})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
