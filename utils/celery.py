@@ -31,8 +31,8 @@ def make_celery(config):
 # 配置变量，使用新格式
 celery_config = {
     'app_name': 'my_app',
-    'broker_url': 'redis://localhost:6379/0',      # 新格式
-    'result_backend': 'redis://localhost:6379/0',  # 新格式
+    'broker_url': 'redis://127.0.0.1:6379/0',      # 新格式
+    'result_backend': 'redis://127.0.0.1:6379/0',  # 新格式
     'broker_connection_retry_on_startup': True,
 }
 
