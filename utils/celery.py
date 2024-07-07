@@ -48,7 +48,7 @@ def optimize_task(self, dataset_name, module_name, model_name):
         model = get_model(model_name)
         bounds = get_bounds(dataset_name, module_name)
         optimal_inputs, optimal_value = get_optimization_results(dataset_name, module_name, model, bounds, particles=1, iterations=1)
-        result = {'optimal_inputs': optimal_inputs.tolist(), 'optimal_value': optimal_value.tolist()}
+        result = {'optimal_inputs': optimal_inputs, 'optimal_value': optimal_value.tolist()}
         logger.info("优化任务完成")
 
         return result

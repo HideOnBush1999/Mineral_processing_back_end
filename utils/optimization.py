@@ -17,7 +17,6 @@ from scipy.interpolate import interp1d
 # 反复迭代，直到达到最大迭代次数或者满足收敛条件。
 
 
-
 def get_bounds(dataset_name, module_name):
     # 读取数据集
     local_dir = './data/multi_layer'
@@ -111,6 +110,7 @@ def interpolate_data(df, num_points):
 
     return df_interpolated
 
+
 class DataNotFoundError(Exception):
     pass
 
@@ -129,7 +129,6 @@ def objective_function_grinding(x, dataset_name, model):
     new_input_columns = ['入口一次风流量', '入口一次风温度', '给煤量', '磨煤机电流', '原煤温度', '原煤水分']
     X = pd.DataFrame([x], columns=new_input_columns)
 
-
     # 预测输出
     y_pred = model.predict(X)
     logger.info(f"y_pred.shape: {y_pred.shape}")
@@ -139,12 +138,12 @@ def objective_function_grinding(x, dataset_name, model):
     object1 = y_pred[0] / x[new_input_columns.index('给煤量')]
 
     # 计划目标2：耗电量尽量小
-    object2 = (x[new_input_columns.index('磨煤机电流')] - current_min) / (current_max - current_min)
+    object2 = (x[new_input_columns.index('磨煤机电流')] -
+               current_min) / (current_max - current_min)
 
     combined_objective = -object1 + object2
 
     return combined_objective
-
 
 
 # 给煤机的目标函数
@@ -164,12 +163,14 @@ def objective_function_coal_machine(x, model):
     coal_supply = redis_client.get('coal_supply')
     if coal_supply is None:
         raise DataNotFoundError('coal_supply not found in Redis')
-    
+
     coal_supply_diff = abs(y_pred[0] - float(coal_supply))
 
     return coal_supply_diff
 
 # 给风机的目标函数
+
+
 def objective_function_wind_machine(x, model):
     input_columns_wind_machine = ['热风阀门开度', '冷风阀门开度', '热一次风温度', '冷一次风温度']
 
@@ -185,8 +186,9 @@ def objective_function_wind_machine(x, model):
     air_flow = redis_client.get('air_flow')
     air_temperature = redis_client.get('air_temperature')
     if air_flow is None or air_temperature is None:
-        raise DataNotFoundError('air_flow or air_temperature not found in Redis')
-    
+        raise DataNotFoundError(
+            'air_flow or air_temperature not found in Redis')
+
     air_flow_diff = abs(y_pred[0][0] - float(air_flow))
     air_temperature_diff = abs(y_pred[0][1] - float(air_temperature))
 
@@ -268,7 +270,8 @@ def objective_function_aph(x, model):
     o2_out_aph = redis_client.get(f"O2_Out_APH")
     corrected_temp = redis_client.get(f"Corrected_Flue_Gas_Out_Temperature")
     if o2_out_aph is None or corrected_temp is None:
-        raise DataNotFoundError("O2_Out_APH or Corrected_Flue_Gas_Out_Temperature is None")
+        raise DataNotFoundError(
+            "O2_Out_APH or Corrected_Flue_Gas_Out_Temperature is None")
 
     o2_out_aph_diff = abs(y_pred[0][0] - float(o2_out_aph))
     corrected_temp_diff = abs(y_pred[0][1] - float(corrected_temp))
@@ -299,7 +302,8 @@ def objective_function_water(x, model):
     feedwater_temp = redis_client.get(f"Feedwater_Temperature")
     feedwater_flow = redis_client.get(f"Feedwater_Flow")
     if feedwater_temp is None or feedwater_flow is None:
-        raise DataNotFoundError("Feedwater_Temperature or Feedwater_Flow is None")
+        raise DataNotFoundError(
+            "Feedwater_Temperature or Feedwater_Flow is None")
 
     feedwater_temp_diff = abs(y_pred[0][0] - float(feedwater_temp))
     feedwater_flow_diff = abs(y_pred[0][1] - float(feedwater_flow))
@@ -310,19 +314,21 @@ def objective_function_water(x, model):
     return combined_objective
 
 
-
 def get_optimization_results(dataset_name, module_name, model, bounds, particles, iterations):
     if module_name == "磨煤":
         def objective_function(x): return objective_function_grinding(
             x, dataset_name=dataset_name, model=model)
         optimal_inputs, optimal_value = pso(objective_function, lb=[b[0] for b in bounds], ub=[
                                             b[1] for b in bounds], swarmsize=particles, maxiter=iterations)
-        
+
         # 将需要的中间结果写入到 redis 数据库中
         redis_client = get_redis_client()
         redis_client.set(f"air_flow", optimal_inputs[0])
         redis_client.set(f"air_temperature", optimal_inputs[1])
         redis_client.set(f"coal_supply", optimal_inputs[2])
+
+        input_keys = ['入口一次风流量', '入口一次风温度', '给煤量', '磨煤机电流', '原煤温度', '原煤水分']
+        optimal_inputs = dict(zip(input_keys, optimal_inputs))
 
         return optimal_inputs, optimal_value
 
@@ -331,6 +337,11 @@ def get_optimization_results(dataset_name, module_name, model, bounds, particles
             x, model=model)
         optimal_inputs, optimal_value = pso(objective_function, lb=[b[0] for b in bounds], ub=[
                                             b[1] for b in bounds], swarmsize=particles, maxiter=iterations)
+
+        input_keys = ['皮带转速', '比例系数']
+        optimal_inputs = dict(zip(input_keys, optimal_inputs))
+        print("optimal_inputs: ", optimal_inputs)
+
         return optimal_inputs, optimal_value
 
     if module_name == "给风机":
@@ -338,8 +349,11 @@ def get_optimization_results(dataset_name, module_name, model, bounds, particles
             x, model=model)
         optimal_inputs, optimal_value = pso(objective_function, lb=[b[0] for b in bounds], ub=[
                                             b[1] for b in bounds], swarmsize=particles, maxiter=iterations)
-        return optimal_inputs, optimal_value
 
+        input_keys = ['热风阀门开度', '冷风阀门开度', '热一次风温度', '冷一次风温度']
+        optimal_inputs = dict(zip(input_keys, optimal_inputs))
+
+        return optimal_inputs, optimal_value
 
     if module_name == "锅炉燃烧":
         def objective_function(x): return objective_function_boiler(
@@ -350,9 +364,22 @@ def get_optimization_results(dataset_name, module_name, model, bounds, particles
         # 将需要的中间结果写入到 redis 数据库中
         redis_client = get_redis_client()
         redis_client.set(f"O2_Out_APH", optimal_inputs[1])
-        redis_client.set(f"Corrected_Flue_Gas_Out_Temperature", optimal_inputs[2])
+        redis_client.set(
+            f"Corrected_Flue_Gas_Out_Temperature", optimal_inputs[2])
         redis_client.set(f"Feedwater_Temperature", optimal_inputs[3])
         redis_client.set(f"Feedwater_Flow", optimal_inputs[4])
+
+        input_keys = [
+            'Coal Flow (t/h)',
+            'O2 Out APH (%)',
+            'Corrected Flue Gas Out Temperature (°C)',
+            'Feedwater temperature (℃)',
+            'Feedwater flow (t/h)',
+            'Energy Input From Boiler (Kcal/h)',
+            'Boiler oxygen level (%)'
+        ]
+        optimal_inputs = dict(zip(input_keys, optimal_inputs))
+
         return optimal_inputs, optimal_value
 
     if module_name == "锅炉进口空预器":
@@ -360,6 +387,11 @@ def get_optimization_results(dataset_name, module_name, model, bounds, particles
             x): return objective_function_aph(x, model=model)
         optimal_inputs, optimal_value = pso(objective_function, lb=[b[0] for b in bounds], ub=[
                                             b[1] for b in bounds], swarmsize=particles, maxiter=iterations)
+
+        input_keys = ['O2 in APH (%)', 'Flue Gas in Temperature (°C)',
+                      'Flue gas temperature (℃)']
+        optimal_inputs = dict(zip(input_keys, optimal_inputs))
+
         return optimal_inputs, optimal_value
 
     if module_name == "给水系统":
@@ -367,4 +399,14 @@ def get_optimization_results(dataset_name, module_name, model, bounds, particles
             x): return objective_function_water(x, model=model)
         optimal_inputs, optimal_value = pso(objective_function, lb=[b[0] for b in bounds], ub=[
                                             b[1] for b in bounds], swarmsize=particles, maxiter=iterations)
+
+        input_keys = [
+            'Superheater desuperheating water flow (t/h)',
+            'Reheater desuperheating water flow (t/h)',
+            'Feedwater pressure (MPa)',
+            'Flue gas temperature (℃)',
+            'Circulating water outlet temperature (℃)'
+        ]
+        optimal_inputs = dict(zip(input_keys, optimal_inputs))
+
         return optimal_inputs, optimal_value
