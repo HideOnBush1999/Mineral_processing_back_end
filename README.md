@@ -45,6 +45,8 @@ INSERT INTO users (username, password, salt) VALUES
 ('cheng', '$2b$12$r6.pPWaHOLONR3bxrRGFLu30jxsbdRYnP/bpHovjkLqjIK3.XnxBC', '$2b$12$r6.pPWaHOLONR3bxrRGFLu');
 ```
 
+日志
+
 minio 对象存储
 
 单例   资源管理
@@ -211,3 +213,4 @@ def optimize_task(self, dataset_name, module_name, model_name):
 ```
 
 
+完成程序优雅的启动和关闭

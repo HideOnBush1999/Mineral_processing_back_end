@@ -78,11 +78,15 @@ def online_train():
         data = request.get_json()
         dataset_name = data.get('dataset_name')
         module_name = data.get('module_name')
-        tree_num = int(data.get('tree_num'))
+        n_estimators = int(data.get('n_estimators'))
+        max_depth = data.get('max_depth')
+        min_samples_split = int(data.get('min_samples_split'))
+        min_samples_leaf = int(data.get('min_samples_leaf'))
 
         # 训练模型
         X_train, _, y_train, _ = data_split(dataset_name, module_name)
-        train_online(X_train, y_train, module_name, tree_num)
+        train_online(X_train, y_train, module_name, n_estimators,
+                     max_depth, min_samples_split, min_samples_leaf)
         return jsonify({'message': 'Online training completed successfully'}), 200
 
     except Exception as e:
@@ -159,7 +163,7 @@ def get_model_list():
 
 #         # 得到求解的结果
 #         optimal_inputs, optimal_value = get_optimization_results(dataset_name, module_name, model, bounds, particles=10, iterations=2)
-        
+
 #         # 将 NumPy 数组转换为 Python 列表
 #         optimal_inputs_list = optimal_inputs.tolist()
 #         optimal_value_list = optimal_value.tolist()
@@ -169,20 +173,21 @@ def get_model_list():
 
 #     except Exception as e:
 #         return jsonify({'error': f'An error occurred during optimization: {str(e)}'}), 500
-    
 
 
 # 优化求解  (请求：数据集名， 模块名， 模型名)  使用celery
 @multi_layer_modeling.route('/optimization_solve', methods=['POST'])
 def optimization_solve():
-    socketio.emit('optimization_result', {'state': 'running', 'info': '优化任务正在运行'})
+    socketio.emit('optimization_result', {
+                  'state': 'running', 'info': '优化任务正在运行'})
     try:
         data = request.get_json()
         dataset_name = data.get('dataset_name')
         module_name = data.get('module_name')
         model_name = data.get('model_name')
 
-        task = optimize_task.apply_async(args=[dataset_name, module_name, model_name])
+        task = optimize_task.apply_async(
+            args=[dataset_name, module_name, model_name])
         return jsonify({'task_id': task.id}), 202   # 202 表示服务器已接受请求，但尚未处理完毕
 
     except Exception as e:
@@ -198,13 +203,16 @@ def get_optimization_result(message):
     task = optimize_task.AsyncResult(task_id)
     if task.state == 'SUCCESS':
         logger.info(f"优化结果：{task.result}")
-        emit('optimization_result', task.result, namespace='/multi_layer_modeling')
+        emit('optimization_result', task.result,
+             namespace='/multi_layer_modeling')
     elif task.state == 'FAILURE':
         logger.info(f"优化任务失败，任务 ID：{task_id} 状态：{task.state}")
-        emit('optimization_result', {'state': task.state, 'error': str(task.info)}, namespace='/multi_layer_modeling')
+        emit('optimization_result', {'state': task.state, 'error': str(
+            task.info)}, namespace='/multi_layer_modeling')
     else:
         logger.info(f"优化任务进行中，任务 ID：{task_id} 状态：{task.state}")
-        emit('optimization_result', {'state': task.state, 'info': task.info}, namespace='/multi_layer_modeling')
+        emit('optimization_result', {
+             'state': task.state, 'info': task.info}, namespace='/multi_layer_modeling')
 
 
 # 获取优化结果  (请求：任务 ID)
@@ -214,7 +222,7 @@ def get_optimization_result(task_id):
         print("获取优化结果")
         # 获取任务异步结果对象
         task_result = celery.AsyncResult(task_id)
-        
+
         # 检查任务状态
         if task_result.state == 'PENDING':
             response = {
@@ -243,12 +251,11 @@ def get_optimization_result(task_id):
                 'state': task_result.state,
                 'status': '未知状态'
             }
-        
+
         return jsonify(response), 200
 
     except Exception as e:
         return jsonify({'error': f'获取结果时发生错误: {str(e)}'}), 500
-
 
 
 def data_split(dataset_name, module_name):
@@ -323,10 +330,16 @@ def data_split(dataset_name, module_name):
     return X_train, X_test, y_train, y_test
 
 
-def train_online(X_train, y_train, module_name, tree_num):
+def train_online(X_train, y_train, module_name, n_estimators, max_depth, min_samples_split, min_samples_leaf):
     logger.info("开始训练模型")
     # 训练模型
-    model = RandomForestRegressor(n_estimators=tree_num, random_state=42)
+    model = RandomForestRegressor(
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        min_samples_split=min_samples_split,
+        min_samples_leaf=min_samples_leaf,
+        random_state=42
+    )
     model.fit(X_train, y_train)
 
     # 保存模型到本地
@@ -335,7 +348,7 @@ def train_online(X_train, y_train, module_name, tree_num):
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
     model_path = os.path.join(
-        model_dir, module_name + '_' + timeStamp + '_' + str(tree_num) + '.pkl')
+        model_dir, f"{module_name}_{timeStamp}_{n_estimators}.pkl")
     joblib.dump(model, model_path)
 
     # 保存模型到 MinIO
@@ -345,7 +358,6 @@ def train_online(X_train, y_train, module_name, tree_num):
         minio_client.make_bucket(bucket_name)
     minio_client.fput_object(
         bucket_name,
-        module_name + '_' + timeStamp + '.pkl',
+        f"{module_name}_{timeStamp}.pkl",
         model_path
     )
-
