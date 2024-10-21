@@ -34,9 +34,10 @@ def get_traids():
 
         # 数据不足 limit 条时，补充空数据
         if len(triples) < limit:
-             empty_rows = limit - len(triples)
-             for _ in range(empty_rows):
-                triples.append({'subject': '... ', 'relation': '... ', 'object': '... ', 'is_empty': True})
+            empty_rows = limit - len(triples)
+            for _ in range(empty_rows):
+                triples.append(
+                    {'subject': '... ', 'relation': '... ', 'object': '... ', 'is_empty': True})
 
         return jsonify({
             'data': triples,
@@ -67,7 +68,7 @@ def get_traid():
             })
 
         total = len(triples)
-        
+
         return jsonify({
             'data': triples,
             'total': total
@@ -257,3 +258,27 @@ def delete_traid():
 #         except Exception as e:
 #             print(f"Error deleting triple and nodes: {e}")
 #             return jsonify({'error': 'Failed to delete triple and nodes'}), 500
+
+
+@traid.route('/get_all_traids', methods=['GET'])
+def get_all_traids():
+    """
+    获取所有三元组，不进行分页
+    """
+    neo4j_driver = get_neo4j_driver()
+    with neo4j_driver.session() as session:
+        # 执行查询，匹配所有的三元组
+        result = session.run(
+            "MATCH (s)-[r]->(o) RETURN s, type(r) as relation, o LIMIT 300"
+        )
+        triples = []
+        for record in result:
+            triples.append({
+                'subject': record['s']['name'],
+                'relation': record['relation'],
+                'object': record['o']['name']
+            })
+
+        return jsonify({
+            'data': triples
+        })
