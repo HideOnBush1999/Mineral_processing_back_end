@@ -97,6 +97,27 @@ def get_model(model_name):
     logger.info(f'Loaded model {model_name} from {model_path}')
     return model
 
+def get_welcome_model(model_name):
+    # 读取模型
+    model_dir = './model/welcome-model'
+    model_path = os.path.join(model_dir, model_name)
+
+    # 如果本地不存在，则去 MinIO 下载
+    if not os.path.exists(model_path):
+        minio_client = get_minio_client()
+        bucket_name = 'welcome-model'
+
+        minio_client.fget_object(
+            bucket_name,
+            model_name,
+            model_path
+        )
+
+    # 读取模型
+    model = joblib.load(model_path)
+    logger.info(f'Loaded model {model_name} from {model_path}')
+    return model
+
 
 def interpolate_data(df, num_points):
     x_old = np.arange(len(df))
