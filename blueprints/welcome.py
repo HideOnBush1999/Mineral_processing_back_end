@@ -152,17 +152,112 @@ def online_train():
         dataset_input_name = data.get('dataset_input_name')
         dataset_output_name = data.get('dataset_output_name')
         module_name = data.get('module_name')
-        n_estimators = int(data.get('n_estimators'))
-        max_depth = data.get('max_depth')
-        min_samples_split = int(data.get('min_samples_split'))
-        min_samples_leaf = int(data.get('min_samples_leaf'))
+        n_estimators = int(data.get('n_estimators', 100))
+        max_depth = data.get('max_depth', None)
+        min_samples_split = int(data.get('min_samples_split', 2))
+        min_samples_leaf = int(data.get('min_samples_leaf', 1))
 
-        # 训练模型
-        X_train, _, y_train, _ = data_split(
+        # 数据分割
+        X_train, X_test, y_train, y_test = data_split(
             dataset_input_name, dataset_output_name, module_name)
-        train_online(X_train, y_train, module_name, n_estimators,
-                     max_depth, min_samples_split, min_samples_leaf)
-        return jsonify({'message': '在线训练成功'}), 200
+
+        # 初始化模型
+        model = RandomForestRegressor(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            min_samples_leaf=min_samples_leaf,
+            random_state=42
+        )
+
+        # 记录每轮训练的 MSE 和模型预测值
+        mse_history = []
+        y_pred_all = []
+
+        # 模拟训练过程，记录每增加一定数量树的 MSE 和预测值
+        for i in range(1, n_estimators + 1, 10):
+            model.set_params(n_estimators=i)
+            model.fit(X_train, y_train)
+            
+            y_pred = model.predict(X_test)
+            y_pred_all.append(y_pred)
+            
+            mse = mean_squared_error(y_test, y_pred)
+            mse_history.append(mse)
+
+        # 保存模型到本地
+        model_dir = './model/welcome-model'
+        timeStamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        if not os.path.exists(model_dir):
+            os.makedirs(model_dir)
+        model_path = os.path.join(model_dir, f"{module_name}_{timeStamp}_{n_estimators}.pkl")
+        joblib.dump(model, model_path)
+
+        # 保存模型到 MinIO
+        minio_client = get_minio_client()
+        bucket_name = 'welcome-model'
+        if not minio_client.bucket_exists(bucket_name):
+            minio_client.make_bucket(bucket_name)
+        minio_client.fput_object(
+            bucket_name,
+            f"{module_name}_{timeStamp}_{n_estimators}.pkl",
+            model_path
+        )
+
+        # 最终预测结果
+        y_pred_final = y_pred_all[-1]
+
+        # 计算最终的评价指标
+        mse_final = mse_history[-1]
+        r2_final = r2_score(y_test, y_pred_final)
+
+        # 获取样本编号
+        sample_numbers = np.arange(len(y_test))
+
+        # 每20个点采样
+        sampled_sample_numbers = sample_numbers[::20]
+        sampled_y_test = y_test[::20]
+        sampled_y_pred = y_pred_final[::20]
+
+        # 绘制预测值与真值对比图
+        plt.figure(figsize=(8.33, 4))
+        plt.plot(sampled_sample_numbers, sampled_y_test, label='True Values', marker='o')
+        plt.plot(sampled_sample_numbers, sampled_y_pred, label='Predicted Values', marker='s')
+        plt.xlabel('Sample Number')
+        plt.ylabel('Values')
+        plt.title('True vs Predicted Values Comparison')
+        plt.legend()
+
+        # 将绘制的对比图转换为 base64 编码的字符串
+        img_buf = io.BytesIO()
+        plt.savefig(img_buf, format='png')
+        img_buf.seek(0)
+        comparison_image_base64 = base64.b64encode(img_buf.read()).decode('utf-8')
+        plt.close()
+
+        # 绘制损失变化图
+        plt.figure(figsize=(8.33, 4))
+        plt.plot(range(len(mse_history)), mse_history, '-o', label='Loss (MSE)', color='blue')
+        plt.xlabel('Training Iterations (10 trees per step)')
+        plt.ylabel('Loss (MSE)')
+        plt.title('Loss During Training')
+        plt.grid()
+        plt.legend()
+
+        # 将绘制的损失图转换为 base64 编码的字符串
+        img_buf = io.BytesIO()
+        plt.savefig(img_buf, format='png')
+        img_buf.seek(0)
+        loss_image_base64 = base64.b64encode(img_buf.read()).decode('utf-8')
+        plt.close()
+
+        return jsonify({
+            'message': '在线训练成功',
+            'mse': mse_final,
+            'r2': r2_final,
+            'comparison_image': comparison_image_base64,
+            'loss_image': loss_image_base64
+        }), 200
 
     except Exception as e:
         return jsonify({'error': f'在线训练失败: {str(e)}'}), 500
