@@ -16,7 +16,7 @@ def get_multi_layer_models():
         skip = (page - 1) * limit
 
         minio_client = get_minio_client()
-        bucket_name = 'multi-layer-model'
+        bucket_name = 'welcome-model'
         if not minio_client.bucket_exists(bucket_name):
             minio_client.make_bucket(bucket_name)
 
@@ -50,7 +50,7 @@ def add_multi_layer_model():
         file.seek(0)  # 移动回文件开头
 
         minio_client = get_minio_client()
-        bucket_name = 'multi-layer-model'
+        bucket_name = 'welcome-model'
         if not minio_client.bucket_exists(bucket_name):
             minio_client.make_bucket(bucket_name)
 
@@ -67,7 +67,7 @@ def delete_multi_layer_model():
         data = request.json
         file_name = data.get('model_name')
         minio_client = get_minio_client()
-        bucket_name = 'multi-layer-model'
+        bucket_name = 'welcome-model'
 
         minio_client.remove_object(bucket_name, file_name)
         return jsonify({'message': 'Model deleted successfully'}), 200
@@ -83,7 +83,7 @@ def update_multi_layer_model():
         old_name = data.get('old_name')
         new_name = data.get('new_name')
         minio_client = get_minio_client()
-        bucket_name = 'multi-layer-model'
+        bucket_name = 'welcome-model'
 
         # Download the old object
         response = minio_client.get_object(bucket_name, old_name)
@@ -108,7 +108,7 @@ def search_multi_layer_model():
     try:
         query = request.args.get('query', default='', type=str)
         minio_client = get_minio_client()
-        bucket_name = 'multi-layer-model'
+        bucket_name = 'welcome-model'
         if not minio_client.bucket_exists(bucket_name):
             minio_client.make_bucket(bucket_name)
 
@@ -134,7 +134,7 @@ def download_multi_layer_model():
     try:
         file_name = request.args.get('model_name', type=str)
         minio_client = get_minio_client()
-        bucket_name = 'multi-layer-model'
+        bucket_name = 'welcome-model'
 
         response = minio_client.get_object(bucket_name, file_name)
         data = response.read()
