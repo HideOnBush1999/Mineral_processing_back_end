@@ -86,11 +86,12 @@ def chat():
             response = "查询到相关的三元组为：\n"
             for result, score in triple:
                 response += f"（{result[0]}, {result[1]}, {result[2]}） 相关度：{score:.2f}\n"
-            
+
         # 调用后台任务启动对话流
         data = {'prompt': prompt, 'triple': response}
         logger.info(f"启动后台任务，数据：{json.dumps(data)}")
-        socketio.start_background_task(target=start_chat_stream_background, data=data)
+        socketio.start_background_task(
+            target=start_chat_stream_background, data=data)
 
         return jsonify({"message": response.strip()})
 
@@ -110,27 +111,33 @@ def start_chat_stream_background(data):
 
     # 对 chat_history 进行初始化，原先的 chat_history 被清空，所以不支持多轮对话
     chat_history = [{
-        'role': 'assistant',
-        'content': triple
+        "role": "assistant",
+        "content": triple
+    }, {
+        "role": "user",
+        "content": prompt
     }]
     try:
-        # 调用模型进行聊天，添加 stream=True 后，返回的是一个迭代器
-        response_stream = model.chat(
-            prompt=prompt, chat_history=chat_history, generate_config={"max_tokens": 1024, "stream": True})
+        # 调用模型进行聊天，添   加 stream=True 后，返回的是一个迭代器
+        response_stream = model.chat(chat_history, generate_config={
+                                     "max_tokens": 1024, "stream": True})
 
         # 逐步处理流式响应
         for response in response_stream:
             delta = response['choices'][0].get('delta', {})
             content = delta.get('content', '')  # 提取实际的内容
             logger.info(f"发送 chat_response 内容：{content}")
-            socketio.emit('chat_response', {'content': content}, namespace='/qa')
+            socketio.emit('chat_response', {
+                          'content': content}, namespace='/qa')
 
-        socketio.emit('chat_response', {'content': "#finish#"}, namespace='/qa')
+        socketio.emit('chat_response', {
+                      'content': "#finish#"}, namespace='/qa')
         logger.info(f"对话流结束")
 
     except Exception as e:
         logger.error(f"聊天流错误：{e}")
-        socketio.emit('chat_response_complete', {'full_response': "对话结束，对话流异常"}, namespace='/qa')
+        socketio.emit('chat_response_complete', {
+                      'full_response': "对话结束，对话流异常"}, namespace='/qa')
 
 
 #  客户端可以调用该接口启动对话流，但是前端并没有调用该接口，因为在 chat 接口中已经启动了后台任务
@@ -144,8 +151,9 @@ def start_chat_stream(data):
 def create_model():
     global client, model_uid, model
     try:
-        model_name = "local-qwen-7b-q5_k_m"
-        model_uid = client.launch_model(model_name=model_name)
+        model_name = "qwen2.5-finetune"
+        model_uid = client.launch_model(
+            model_name=model_name, model_engine="llama.cpp", model_format="ggufv2")
         model = client.get_model(model_uid)
         logger.info("Model created successfully")
         return jsonify({
@@ -206,7 +214,8 @@ def filter_results(results, question):
                             key=lambda x: x[1], reverse=True)
 
     # 过滤得分大于 0.1 的结果，并取前三高
-    top_results = [(result, score) for result, score in scored_results if score > 0.1][:3]
+    top_results = [(result, score)
+                   for result, score in scored_results if score > 0.1][:3]
     return top_results
 
 
